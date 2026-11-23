@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ACEest Fitness - DevOps Assignment 2 Report</title>
+  <style>
+    @page { size: A4; margin: 17mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172b3a; font: 10.5pt/1.4 Arial, sans-serif; }
+    h1 { font-size: 22pt; margin: 0 0 10mm; }
+    h2 { font-size: 15pt; border-bottom: 1px solid #aac0cb; padding-bottom: 3mm; }
+    h3 { font-size: 12pt; margin-bottom: 2mm; }
+    p { margin: 0 0 4mm; }
+    li { margin-bottom: 2mm; }
+    table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 4mm 0; }
+    td, th { border: 1px solid #aac0cb; padding: 2mm; text-align: left; }
+    pre { background: #edf3f6; padding: 4mm; font-size: 9pt; white-space: pre-wrap; }
+    .page { break-after: page; }
+    .page:last-child { break-after: auto; }
+    .label { font-size: 10pt; color: #526876; }
+    .note { padding: 4mm; background: #edf3f6; }
+    a { color: #16576e; overflow-wrap: anywhere; }
+    @media screen {
+      body { background: #e4ebef; }
+      .page { background: white; max-width: 210mm; min-height: 297mm;
+              margin: 8mm auto; padding: 17mm; }
+    }
+  </style>
+</head>
+<body>
+<section class="page">
+  <p class="label">CSIZG514 / SEZG514 - Assignment 2 | 23 November 2026 | Page 1 of 3</p>
+  <h1>ACEest Fitness &amp; Gym<br>Automated CI/CD Implementation</h1>
+  <h2>1. CI/CD architecture overview</h2>
+  <p>The implementation extends the Assignment 1 Flask application in
+    <a href="https://github.com/vinayakmsft/BitsDevopsProject">BitsDevopsProject</a>.
+    Its member registration, workout recording, dashboard and SQLite persistence
+    remain intact. The assignment entry point, ACEest_Fitness.py, delegates to the
+    existing application factory. New liveness and release endpoints support
+    orchestration and identification of the actual version receiving requests.</p>
+  <pre>GitHub push / pull request
+  -> Jenkins: checkout exact commit -> build non-root Docker image
+  -> Ruff + containerized Pytest + real NGINX routing integration
+  -> SonarQube scan -> enforced quality gate
+  -> Docker Hub: immutable version/build/commit image tag
+  -> Kubernetes: deploy image digest -> readiness and smoke checks
+  -> promote or restore saved deployment and routing state</pre>
+  <p>Jenkins polling provides a fallback for GitHub webhooks. Tests run inside the
+    same image that is published, avoiding dependency differences between CI and
+    deployment. Coverage includes branches and must reach 90% for the application.
+    SonarQube is a separate gate: only successful tests and an accepted analysis
+    permit image publishing. Credentials are supplied by Jenkins, never embedded
+    in application files or committed to source control.</p>
+  <p>Kubernetes hosts two replicas per application slot: blue, green, candidate
+    and rolling. A two-replica NGINX router exposes all strategies through distinct
+    API prefixes. Startup, readiness and liveness probes have separate purposes.
+    Rolling updates retain ready replicas; graceful shutdown allows in-flight
+    requests to finish. Immutable routing ConfigMaps preserve the configuration
+    required to roll back the router itself.</p>
+  <h3>Version control and artifacts</h3>
+  <p>The original release remains reproducible at Git commit 0cfe471. VERSION
+    records the Assignment 2 release, while versions.json maps versions to their
+    implementation. New work belongs on a feature branch and is reviewed through
+    a pull request; annotated release tags are created after merge. Jenkins
+    archives test results, coverage, the genuine Sonar report, the pushed image
+    digest, deployment evidence and a previous-release rollback snapshot.</p>
+  <p class="note">The architecture is implemented in source. Local validation is
+    not a substitute for successful hosted Jenkins executions, public registry
+    images or a publicly reachable Kubernetes endpoint.</p>
+</section>
+<section class="page">
+  <p class="label">ACEest Fitness - CI/CD Implementation Report | Page 2 of 3</p>
+  <h2>2. Progressive delivery and resilience</h2>
+  <table>
+    <thead><tr><th>Strategy / endpoint</th><th>Implementation and recovery</th></tr></thead>
+    <tbody>
+      <tr><td>Rolling<br>/rolling/</td><td>Two replicas with maxUnavailable=0 and
+        maxSurge=1. Readiness gates replacement pods; failure restores the
+        previous Deployment spec and image.</td></tr>
+      <tr><td>Blue-green<br>/blue-green/</td><td>Prepare and verify the inactive color,
+        then switch the stable Service selector. The old color remains available
+        for recovery; rollback restores the original selector.</td></tr>
+      <tr><td>Canary<br>/canary/</td><td>NGINX routes 10%, then 50%, then 100% of requests
+        to candidate. Each stage samples 200 requests and pauses. Successful
+        validation promotes stable and returns the canary route to stable.</td></tr>
+      <tr><td>Shadow<br>/shadow/</td><td>Stable responds to the user. Only GET/HEAD
+        requests are mirrored to candidate; mirrored responses are discarded.
+        Mutations are not replayed.</td></tr>
+      <tr><td>A/B<br>/ab/</td><td>Initial 50/50 cohort allocation with a sticky
+        aceest_variant cookie. Stable and candidate remain separately addressable;
+        this is routing validation, not a powered business experiment.</td></tr>
+    </tbody>
+  </table>
+  <h2>3. Challenges and mitigation strategies</h2>
+  <p><strong>Consistency across versions.</strong> Separate ephemeral SQLite files
+    would lose registrations when traffic switches. All application slots instead
+    mount one persistent volume and are pinned to exactly one labelled Minikube
+    node. A 30-second database lock timeout handles concurrent local writers. This
+    intentionally demonstrates application availability on a single node, not
+    multi-node high availability. Production requires an external database and
+    backward-compatible migrations; SQLite must not be shared over NFS.</p>
+  <p><strong>Safe routing and rollback.</strong> Deployment names alone do not
+    establish a strategy. Real NGINX rules implement per-request weighting,
+    cookie-based cohorts and read-only mirroring. Integration testing uncovered
+    a rewrite-order bug: a rewrite with break skipped subsequent backend
+    assignment. Moving assignment before the rewrite fixed the root cause.
+    Previous application specs, Service selector and router configuration are
+    saved before deployment. Failed rollout or smoke validation triggers explicit
+    restoration and a nonzero exit, never a success-shaped fallback.</p>
+  <p><strong>Environment and evidence limitations.</strong> Docker was available,
+    but no Kubernetes context or hosted Jenkins installation was configured.
+    Reproducible Minikube, Jenkins and SonarQube instructions therefore accompany
+    the implementation. Public endpoints, registry credentials and real Jenkins
+    run evidence must be supplied by the owner. Host-only Minikube addresses do
+    not automatically become reachable from a remote Linux Jenkins agent.</p>
+</section>
+<section class="page">
+  <p class="label">ACEest Fitness - CI/CD Implementation Report | Page 3 of 3</p>
+  <h2>4. Key automation outcomes and validation</h2>
+  <ul>
+    <li><strong>Application reliability:</strong> 43 containerized Pytest cases
+      passed, covering inherited behavior, release metadata, liveness, manifest
+      validation, inactive-color selection and failed-rollout recovery.</li>
+    <li><strong>Coverage:</strong> measured application branch-inclusive coverage
+      is 93.63%, exceeding the 90% test threshold. Infrastructure scripts have
+      focused unit and integration validation rather than being counted as
+      application coverage.</li>
+    <li><strong>Real traffic behavior:</strong> 200-request routing checks passed
+      at 0%, 10%, 50% and 100% canary settings. The 100% stage sent every request
+      to candidate. Exact intermediate percentages are probabilistic.</li>
+    <li><strong>A/B and shadow safety:</strong> repeated cookie A/B requests stayed
+      on the selected release. Candidate logs confirmed mirrored reads and no
+      replay of the tested shadow write. Twenty concurrent member registrations
+      were visible across version routes through the shared database.</li>
+    <li><strong>Static analysis:</strong> SonarQube 26.11 measured 93.6% coverage,
+      zero bugs and zero duplication. The strict gate is blocked by one inherited
+      CSRF finding, preserved for manual review at the owner's request.
+      Full, genuine evidence is in reports/SONARQUBE.md and the raw JSON.</li>
+    <li><strong>Traceability:</strong> Jenkins builds use commit-linked immutable
+      image tags, deployment uses the registry digest, and every deployment saves
+      an explicit recovery artifact. Test or quality-gate failure blocks release.</li>
+  </ul>
+  <h2>5. Submission readiness and remaining operational steps</h2>
+  <p>The project contains the application and version references, Jenkinsfile,
+    Dockerfile, Kubernetes templates, routing and rollback driver, Pytest tests,
+    analysis configuration and this report. Local verification covers executable
+    application behavior and real proxy traffic, but does not claim measured
+    zero-downtime on a live Kubernetes rollout or completed hosted Jenkins runs.</p>
+  <ol>
+    <li>Review and merge the Assignment 2 pull request; create annotated version
+      tags and preserve the Assignment 1 history.</li>
+    <li>Configure Jenkins plugins, agent, scanner, webhooks and least-privilege
+      credentials. Run recent commits successfully and capture the build URLs.</li>
+    <li>Publish all versions to the owner's public Docker Hub repository. Keep
+      immutable build tags and record the image digest used by each deployment.</li>
+    <li>Bootstrap Minikube, run each strategy and a deliberate failure/rollback
+      demonstration, and capture Kubernetes rollout and recovery evidence.</li>
+    <li>Provide an authorized, reviewer-accessible HTTPS endpoint, the hosted
+      SonarQube dashboard and final reports. A localhost port-forward URL is not
+      a public submission endpoint.</li>
+  </ol>
+  <p class="note"><strong>Conclusion:</strong> Automated verification, quality
+    gates, packaging, progressive delivery and recovery form one reproducible
+    workflow. The remaining hosted-service evidence is explicitly identified
+    rather than overstating submission readiness.</p>
+</section>
+</body>
+</html>
