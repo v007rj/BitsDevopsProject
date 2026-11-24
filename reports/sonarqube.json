@@ -1,0 +1,184 @@
+{
+  "server": "http://127.0.0.1:50099",
+  "task": {
+    "id": "c0c4af97-e88c-4560-975e-ba6cd5f43607",
+    "type": "REPORT",
+    "componentId": "9155edd9-41cf-4268-a588-0697381a5212",
+    "componentKey": "aceest-fitness",
+    "componentName": "ACEest Fitness and Gym",
+    "componentQualifier": "TRK",
+    "analysisId": "03804428-c7f8-4296-92e7-36e499d4b318",
+    "status": "SUCCESS",
+    "submittedAt": "2026-11-23T09:34:13+0000",
+    "submitterLogin": "admin",
+    "startedAt": "2026-11-23T09:34:14+0000",
+    "executedAt": "2026-11-23T09:34:18+0000",
+    "executionTimeMs": 4173,
+    "hasScannerContext": true,
+    "warningCount": 0,
+    "warnings": [],
+    "infoMessages": []
+  },
+  "qualityGate": {
+    "status": "ERROR",
+    "conditions": [
+      {
+        "status": "OK",
+        "metricKey": "reliability_rating",
+        "comparator": "GT",
+        "errorThreshold": "1",
+        "actualValue": "1"
+      },
+      {
+        "status": "ERROR",
+        "metricKey": "security_rating",
+        "comparator": "GT",
+        "errorThreshold": "1",
+        "actualValue": "4"
+      },
+      {
+        "status": "OK",
+        "metricKey": "coverage",
+        "comparator": "LT",
+        "errorThreshold": "90",
+        "actualValue": "93.6"
+      },
+      {
+        "status": "OK",
+        "metricKey": "duplicated_lines_density",
+        "comparator": "GT",
+        "errorThreshold": "3",
+        "actualValue": "0.0"
+      }
+    ],
+    "ignoredConditions": false,
+    "caycStatus": "over-compliant"
+  },
+  "measures": [
+    {
+      "metric": "coverage",
+      "value": "93.6",
+      "bestValue": false
+    },
+    {
+      "metric": "bugs",
+      "value": "0",
+      "bestValue": true
+    },
+    {
+      "metric": "code_smells",
+      "value": "1",
+      "bestValue": false
+    },
+    {
+      "metric": "duplicated_lines_density",
+      "value": "0.0",
+      "bestValue": true
+    },
+    {
+      "metric": "ncloc",
+      "value": "1130"
+    },
+    {
+      "metric": "vulnerabilities",
+      "value": "1",
+      "bestValue": false
+    }
+  ],
+  "issues": [
+    {
+      "key": "779403b5-fe44-4168-ab82-a6d6a6d3cfc6",
+      "rule": "python:S8786",
+      "severity": "MAJOR",
+      "component": "aceest-fitness:app.py",
+      "project": "aceest-fitness",
+      "line": 9,
+      "hash": "ced8265151bf0647f3071cf449da1023",
+      "textRange": {
+        "startLine": 9,
+        "endLine": 9,
+        "startOffset": 29,
+        "endOffset": 55
+      },
+      "flows": [],
+      "status": "OPEN",
+      "message": "Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.",
+      "effort": "20min",
+      "debt": "20min",
+      "author": "",
+      "tags": [
+        "regex",
+        "performance"
+      ],
+      "creationDate": "2026-11-23T09:33:57+0000",
+      "updateDate": "2026-11-23T09:33:57+0000",
+      "type": "CODE_SMELL",
+      "scope": "MAIN",
+      "quickFixAvailable": false,
+      "messageFormattings": [],
+      "codeVariants": [],
+      "cleanCodeAttribute": "EFFICIENT",
+      "cleanCodeAttributeCategory": "INTENTIONAL",
+      "impacts": [
+        {
+          "softwareQuality": "RELIABILITY",
+          "severity": "MEDIUM"
+        }
+      ],
+      "issueStatus": "OPEN",
+      "prioritizedRule": false,
+      "fromSonarQubeUpdate": false,
+      "internalTags": [],
+      "linkedTicketStatus": "NOT_LINKED"
+    },
+    {
+      "key": "7ab8f5cc-4dd7-4347-8dfc-5015f0238ec0",
+      "rule": "python:S4502",
+      "severity": "CRITICAL",
+      "component": "aceest-fitness:app.py",
+      "project": "aceest-fitness",
+      "line": 15,
+      "hash": "ef9404ed6ebb412a509a122abf93298d",
+      "textRange": {
+        "startLine": 15,
+        "endLine": 15,
+        "startOffset": 10,
+        "endOffset": 56
+      },
+      "flows": [],
+      "status": "OPEN",
+      "message": "Make sure disabling CSRF protection is safe here.",
+      "effort": "5min",
+      "debt": "5min",
+      "author": "",
+      "tags": [
+        "cwe",
+        "django",
+        "flask",
+        "former-hotspot"
+      ],
+      "creationDate": "2026-11-23T09:33:57+0000",
+      "updateDate": "2026-11-23T09:33:57+0000",
+      "type": "VULNERABILITY",
+      "scope": "MAIN",
+      "quickFixAvailable": false,
+      "messageFormattings": [],
+      "codeVariants": [],
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "cleanCodeAttributeCategory": "CONSISTENT",
+      "impacts": [
+        {
+          "softwareQuality": "SECURITY",
+          "severity": "HIGH"
+        }
+      ],
+      "issueStatus": "OPEN",
+      "prioritizedRule": false,
+      "fromSonarQubeUpdate": false,
+      "internalTags": [],
+      "linkedTicketStatus": "NOT_LINKED"
+    }
+  ],
+  "issueTotal": 2,
+  "validationScope": "Local working tree; disposable server, not hosted Jenkins."
+}

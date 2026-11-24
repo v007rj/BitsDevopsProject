@@ -1,0 +1,12 @@
+{
+  "1.0.0": {
+    "git_ref": "0cfe471",
+    "entrypoint": "app.py",
+    "features": "Assignment 1 dashboard, members, workouts, SQLite, tests and Docker"
+  },
+  "2.0.0": {
+    "git_ref": "v2.0.0 (create after merge)",
+    "entrypoint": "ACEest_Fitness.py",
+    "features": "Release metadata, Jenkins CD, SonarQube, five deployment strategies and rollback"
+  }
+}

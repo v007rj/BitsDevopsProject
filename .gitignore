@@ -11,3 +11,9 @@ instance/
 .env
 .idea/
 .vscode/
+reports/*.xml
+reports/coverage.json
+reports/ce-task.txt
+.scannerwork/
+artifacts/
+.docker-auth/
