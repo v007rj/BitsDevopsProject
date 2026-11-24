@@ -12,3 +12,9 @@ htmlcov
 assignment.txt
 README.md
 Jenkinsfile
+.docker-auth
+.scannerwork
+reports
+artifacts
+REPORT.html
+REPORT.pdf

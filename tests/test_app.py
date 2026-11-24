@@ -1,6 +1,21 @@
 import pytest
 
 
+def test_version_identifies_configured_release(app, client):
+    app.config.update(APP_VERSION="2.0.0", DEPLOYMENT_SLOT="green")
+    assert client.get("/api/version").get_json() == {
+        "version": "2.0.0",
+        "slot": "green",
+    }
+
+
+def test_liveness_does_not_open_database(app, client):
+    app.config["DATABASE"] = "/nonexistent/parent/database.sqlite"
+    response = client.get("/live")
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "alive"}
+
+
 def test_dashboard_loads_with_empty_statistics(client):
     response = client.get("/")
 

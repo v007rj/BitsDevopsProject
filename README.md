@@ -1,311 +1,300 @@
-# ACEest Fitness & Gym
+# ACEest Fitness & Gym - Assignment 2
 
-A production-ready Flask application and automated CI/CD reference project for
-managing gym members and recording workout activity. The project demonstrates
-application modularization, automated testing, containerization, Jenkins builds,
-and continuous integration with GitHub Actions.
+Extends the existing [Assignment 1 application](app.py) rather than replacing it.
+Repository: <https://github.com/vinayakmsft/BitsDevopsProject>.
 
-
-## Features
-
-- Responsive fitness dashboard with live member and workout statistics
-- REST API for member registration, listing, and deletion
-- REST API for workout creation and activity history
-- SQLite persistence with foreign-key integrity and cascading cleanup
-- Input validation with consistent JSON errors and HTTP status codes
-- Health endpoint suitable for container and deployment probes
-- Pytest suite with branch coverage enforcement
-- Non-root Docker image with a built-in health check
-- Jenkins declarative build pipeline
-- GitHub Actions pipeline for syntax, lint, image build, and containerized tests
-
-## Architecture
+## Architecture and deliverables
 
 ```text
-Browser / API client
-        |
-        v
-Flask + Gunicorn
-  |           |
-Jinja UI    JSON API
-        |
-        v
-      SQLite
+GitHub push / PR -> Jenkins checkout -> Docker build -> Ruff + container Pytest
+   -> SonarQube analysis -> quality gate -> Docker Hub immutable image
+   -> Kubernetes deployment -> readiness + route smoke tests -> success / rollback
+
+Client -> NGINX router -> blue / green / candidate / rolling Gunicorn + Flask
+                                  -> shared SQLite PVC (single Minikube node)
 ```
 
-The Flask application uses an application factory, opens one SQLite connection
-per request context, and initializes its schema automatically. In local
-development the database is created at `instance/aceest.sqlite`. The database
-path can be overridden with `DATABASE_PATH`.
+| Deliverable | Location |
+|---|---|
+| Assignment-compatible Flask entry point | [ACEest_Fitness.py](ACEest_Fitness.py) |
+| Existing dashboard, members and workouts implementation | [app.py](app.py), [templates](templates), [static](static) |
+| Incremental releases | [VERSION](VERSION), [versions.json](versions.json), Git history |
+| CI/CD and image | [Jenkinsfile](Jenkinsfile), [Dockerfile](Dockerfile) |
+| Kubernetes infrastructure | [k8s](k8s), [deployment driver](scripts/deploy.py) |
+| Tests and genuine analysis output | [tests](tests), [reports](reports) |
+| Verified three-page report | [REPORT.pdf](REPORT.pdf), [editable HTML](REPORT.html) |
 
-## Repository layout
+**Evidence boundary:** local tests, routing checks and analysis are distinct from
+hosted Jenkins executions, registry publishing and a publicly reachable cluster.
+See [validation status](reports/VALIDATION.md). Do not submit placeholder URLs or
+claim a Jenkins run based only on the local checks.
 
-```text
-.
-|-- .github/workflows/main.yml  # GitHub Actions CI pipeline
-|-- static/style.css            # Dashboard styles
-|-- templates/                  # Jinja dashboard and error pages
-|-- tests/                      # Pytest suite and fixtures
-|-- app.py                      # Application factory, data layer, and routes
-|-- compose.yaml                # Local Docker Compose service
-|-- Dockerfile                  # Reproducible non-root image
-|-- Jenkinsfile                 # Jenkins build and quality gates
-|-- pyproject.toml              # Pytest, coverage, and Ruff settings
-|-- requirements.txt            # Runtime dependencies
-`-- requirements-dev.txt        # Test and lint dependencies
-```
+## Run the existing application
 
-## Prerequisites
-
-Choose either the native Python workflow or Docker:
-
-- Python 3.11 or newer
-- Git
-- Docker Engine or Docker Desktop (for container execution)
-- Jenkins with access to Docker (for the Jenkins pipeline)
-
-## Local setup
-
-### Windows PowerShell
+PowerShell, from this project directory:
 
 ```powershell
-git clone https://github.com/OWNER/REPOSITORY.git
-Set-Location REPOSITORY
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
-python app.py
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe ACEest_Fitness.py
 ```
 
-### macOS or Linux
+Open <http://localhost:5000>. `app.py` remains a compatible entry point.
 
-```bash
-git clone https://github.com/OWNER/REPOSITORY.git
-cd REPOSITORY
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
-python app.py
-```
+| Method | Path | Function |
+|---|---|---|
+| GET | `/` | Dashboard |
+| GET | `/health` | Database-aware readiness |
+| GET | `/live` | Process liveness, independent of the database |
+| GET | `/api/version` | Release version and deployment slot |
+| GET, POST | `/api/members` | List / register members |
+| DELETE | `/api/members/<id>` | Remove a member and their workouts |
+| GET, POST | `/api/workouts` | List / record workouts |
 
-Open <http://localhost:5000>. Verify service readiness at
-<http://localhost:5000/health>.
+JSON member fields: `name`, `email`, `membership` (`Basic`, `Premium`, `Elite`),
+optional ISO `joined_on`. Workout fields: `member_id`, `workout_type` (`Cardio`,
+`Strength`, `Flexibility`, `HIIT`, `Recovery`), `duration_minutes` (1-1440),
+`calories_burned` (non-negative), optional ISO `completed_on`.
+`DATABASE_PATH` overrides the local SQLite path; `APP_VERSION` and
+`DEPLOYMENT_SLOT` identify the running release. Preserve the default database
+path or mount `/app/instance` for persistence.
 
-The development server is for local use only. For a production-style local
-process, run:
+## Containerized validation
 
-```bash
-gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 app:app
-```
-
-## API reference
-
-All request bodies must use `Content-Type: application/json`.
-
-| Method | Endpoint | Purpose | Success |
-|---|---|---|---|
-| `GET` | `/` | Render the activity dashboard | `200` |
-| `GET` | `/health` | Check application and database health | `200` |
-| `GET` | `/api/members` | List members and workout counts | `200` |
-| `POST` | `/api/members` | Register a member | `201` |
-| `DELETE` | `/api/members/<id>` | Delete a member and their workouts | `204` |
-| `GET` | `/api/workouts` | List workout history | `200` |
-| `POST` | `/api/workouts` | Record a workout | `201` |
-
-### Register a member
-
-```bash
-curl -X POST http://localhost:5000/api/members \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Maya Singh","email":"maya@example.com","membership":"Premium"}'
-```
-
-Membership must be `Basic`, `Premium`, or `Elite`. The optional `joined_on`
-field uses `YYYY-MM-DD`; it defaults to today.
-
-### Record a workout
-
-```bash
-curl -X POST http://localhost:5000/api/workouts \
-  -H "Content-Type: application/json" \
-  -d '{"member_id":1,"workout_type":"Strength","duration_minutes":45,"calories_burned":360}'
-```
-
-Workout type must be `Cardio`, `Strength`, `Flexibility`, `HIIT`, or
-`Recovery`. The optional `completed_on` field uses `YYYY-MM-DD`; it defaults to
-today.
-
-## Tests and quality checks
-
-Install the development dependencies, then run:
-
-```bash
-pytest
-ruff check .
-python -m compileall -q app.py tests
-```
-
-`pytest` generates a terminal coverage report and fails below 90% branch
-coverage. The suite covers dashboard rendering, health checks, member and
-workout lifecycles, input validation, duplicate handling, missing resources,
-content types, and cascading deletion.
-
-To generate a browsable HTML coverage report:
-
-```bash
-pytest --cov-report=html
-```
-
-Then open `htmlcov/index.html`.
-
-## Docker
-
-### Build and run
-
-```bash
-docker build -t aceest-fitness:local .
-docker run --rm -p 5000:5000 --name aceest aceest-fitness:local
-```
-
-Run tests exactly as CI does:
-
-```bash
+```powershell
+docker build --build-arg APP_VERSION=2.0.0 -t aceest-fitness:local .
+docker run --rm aceest-fitness:local ruff check .
 docker run --rm aceest-fitness:local pytest
+New-Item -ItemType Directory -Force reports | Out-Null
+docker run --rm --user 0 -e DATABASE_PATH=/tmp/test.sqlite `
+  -v "${PWD}\reports:/reports" aceest-fitness:local `
+  pytest --junitxml=/reports/pytest.xml --cov-report=xml:/reports/coverage.xml `
+  --cov-report=json:/reports/coverage.json
+python -m scripts.check_router --image aceest-fitness:local
 ```
 
-Run with persistent database storage through Compose:
+The last command launches only uniquely named temporary containers, a network
+and a volume, checks all routing modes and concurrent shared-data writes, and
+removes those resources. It does not touch other Docker workloads.
+The runtime is UID/GID 10001; a writable report bind mount may require the
+explicit UID override shown above. Jenkins instead uses its agent UID/GID.
+Coverage must be at least **90% including branches for the Flask application**.
+Infrastructure scripts have focused unit tests and routing integration checks,
+but are excluded from Sonar's application coverage calculation.
 
-```bash
+```powershell
 docker compose up --build -d
-docker compose ps
-docker compose logs -f web
 docker compose down
 ```
 
-Use `docker compose down -v` only when the stored local database should also be
-deleted.
+Compose retains its named database volume. Never delete it unless you intend
+to discard member data.
 
-### Image design
+## Jenkins, SonarQube and Docker Hub setup
 
-The image is based on the small `python:3.13-slim` base, installs pinned
-dependencies without a pip cache, runs as the unprivileged `aceest` user, and
-uses Gunicorn instead of Flask's development server. Its health check calls the
-application's database-aware `/health` endpoint.
+1. Provision a Linux Jenkins controller and a Linux agent labelled
+   **aceest-linux** with Git, Docker, Python 3 and kubectl. Native Windows
+   Jenkins agents are not supported by this shell-based pipeline. An agent
+   must have authorized Docker access; never expose an unauthenticated daemon.
+2. Install **Pipeline**, **Git**, **GitHub Branch Source**, **JUnit**,
+   **Credentials Binding**, and **SonarQube Scanner for Jenkins** plugins.
+   Under **Tools**, install a CLI scanner named **SonarScanner**.
+3. Start a SonarQube Community installation with durable storage; an educational
+   local instance can run `docker run -d --name aceest-sonarqube -p 127.0.0.1:9000:9000
+   -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true sonarqube:community`.
+   This disables Elasticsearch bootstrap checks **only for a local lab**.
+   Change the initial admin password immediately. Use a supported external
+   PostgreSQL database and normal bootstrap checks for a durable installation.
+4. In SonarQube create project **aceest-fitness**, generate a project analysis
+   token, and assign an **ACEest CI** custom gate with **overall-code** conditions:
+   coverage >=90%, reliability rating A, security rating A, and duplication <=3%.
+   Keep the recommended new-code conditions as well if desired. Overall
+   conditions are essential: a new project's new-code-only gate can return
+   "OK" without evaluating any conditions. The exporter rejects that empty
+   result. A failed gate always blocks publishing/deployment.
+5. Jenkins **Credentials**:
+   - `sonarqube-token`: Secret Text project token.
+   - `dockerhub`: Username + Docker Hub access token (not committed to Git).
+   - `aceest-kubeconfig`: Secret File, a working kubeconfig with credentials and
+     endpoints reachable **from the Linux agent**.
+     Apply [the deployment Role](k8s/rbac.yaml) using an administrator during
+     setup. The namespace-scoped account supports workload changes, pod exec
+     for canary sampling, and `services/proxy` for authenticated smoke checks;
+     it cannot bootstrap namespaces or access Secrets.
+6. **System > SonarQube servers**: name **aceest-sonarqube**, URL reachable from
+   the agent, credential `sonarqube-token`. Add SonarQube webhook
+   `https://JENKINS_HOST/sonarqube-webhook/` (trailing slash required).
+   If services run on different container networks, `localhost` is not a
+   shared host. Confirm connectivity in both directions.
+7. Create a **Multibranch Pipeline**, use the repository above as a GitHub
+   source, and scan it. Script path: `Jenkinsfile`. Add GitHub push webhook
+   `https://JENKINS_HOST/github-webhook/`. SCM polling every five minutes is a
+   fallback. Do not give registry/deployment credentials to untrusted PR jobs.
+8. Create your own **public Docker Hub repository**. On the `main` branch job,
+   set `IMAGE_REPOSITORY` to `YOUR_DOCKERHUB_USER/aceest-fitness`. Builds publish
+   `VERSION-build.BUILD_NUMBER-COMMIT` tags only after both test and quality
+   gates pass. Kubernetes uses the pushed **digest**, not a mutable `latest`.
+   Set `DEPLOY=true` only after cluster bootstrap below.
 
-## Jenkins BUILD pipeline
+Jenkins archives JUnit, XML/JSON coverage, genuine Sonar results, image digest,
+deployment result and the previous-release rollback snapshot. Failed tests or
+analysis never publish images. `DEPLOY=false` intentionally enables a
+quality-gated build/publish without altering infrastructure.
 
-The `Jenkinsfile` defines the controlled secondary build and quality gate:
-
-1. **Checkout** obtains the exact revision from source control.
-2. **Build image** creates a uniquely tagged image using the Jenkins build
-   number.
-3. **Lint and syntax** runs Ruff and Python byte-code compilation in the image.
-4. **Unit tests** runs the complete Pytest suite in the image.
-5. **Post-build cleanup** removes the temporary image and workspace.
-
-### Jenkins setup
-
-1. Provision a Linux Jenkins agent with Git and Docker installed.
-2. Permit the Jenkins service account to access the Docker daemon according to
-   your organization's security policy.
-3. In **Manage Jenkins > Plugins**, install:
-   - Pipeline
-   - Git
-   - GitHub
-   - Workspace Cleanup
-4. Select **New Item > Multibranch Pipeline** (recommended).
-5. Add the GitHub repository as the branch source. For a private repository,
-   add a least-privilege GitHub credential; a public repository needs none.
-6. Keep the script path as `Jenkinsfile`, scan the repository, and run the
-   discovered branch.
-7. Add a GitHub webhook pointing to
-   `https://JENKINS_HOST/github-webhook/` with the `push` event. The Jenkins
-   host must be reachable by GitHub over HTTPS.
-8. Confirm all four stages pass in the Jenkins build view.
-
-For a simple Pipeline job instead, choose **Pipeline script from SCM**, select
-Git, enter the repository URL, set the branch to `*/main`, and use
-`Jenkinsfile` as the script path.
-
-## GitHub Actions CI
-
-`.github/workflows/main.yml` runs on every push and pull request. It:
-
-1. Checks out the source.
-2. Configures Python 3.13 and caches pip downloads.
-3. Installs the pinned development dependencies.
-4. checks Python syntax with `compileall`.
-5. lints the repository with Ruff.
-6. builds the Docker image.
-7. runs Pytest inside that image.
-
-The workflow has read-only repository permissions, cancels stale builds for the
-same ref, and enforces a 15-minute timeout. Protect the `main` branch in GitHub
-and require the **Build, lint, and test** check before merge.
-
-## Version-control workflow
-
-Initialize and publish the repository:
-
-```bash
-git init
-git branch -M main
-git add .
-git commit -m "feat: build ACEest fitness management service"
-git remote add origin https://github.com/OWNER/REPOSITORY.git
-git push -u origin main
-```
-
-Use short-lived branches and Conventional Commit-style messages:
-
-```bash
-git switch -c feature/member-search
-git commit -m "feat: add member search endpoint"
-git switch main
-git switch -c fix/workout-validation
-git commit -m "fix: reject workouts with invalid durations"
-```
-
-Open a pull request, allow GitHub Actions and Jenkins to pass, request review,
-then merge. Do not commit `.env`, local databases, virtual environments, or
-credentials; these paths are excluded in `.gitignore`.
-
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `5000` | Port used by direct `python app.py` execution |
-| `DATABASE_PATH` | `instance/aceest.sqlite` | SQLite database file location |
-
-Example:
-
-```bash
-DATABASE_PATH=/data/aceest.sqlite PORT=8080 python app.py
-```
-
-In PowerShell:
+For a **disposable local analysis** without configuring Jenkins:
 
 ```powershell
-$env:DATABASE_PATH = "C:\aceest-data\aceest.sqlite"
-$env:PORT = "8080"
-python app.py
+python -m scripts.local_sonar
 ```
+
+Run after creating XML coverage. This pulls SonarQube and its CLI, starts a
+server bound only to localhost, changes its default password, scans locally,
+exports `reports\sonarqube.json`, then deletes its own server and network.
+The report is genuine evidence but its temporary dashboard URL expires.
+No code is sent to a third-party analysis service.
+**Current expected result:** the strict gate exits nonzero after saving evidence
+because the inherited CSRF finding remains open. The owner chose to preserve the
+existing API and leave that finding for review. See [the scan report](reports/SONARQUBE.md);
+do not suppress the gate simply to obtain a green build.
+
+## Minikube bootstrap (single-node lab)
+
+Install Minikube and kubectl using the supported Windows installation
+instructions. Docker Desktop must be running. Commands below operate on
+**your Minikube context**, never the currently selected context implicitly.
+
+```powershell
+minikube start --driver=docker --cpus=4 --memory=4096
+kubectl --context minikube label node minikube aceest-storage=true --overwrite
+docker build --build-arg APP_VERSION=2.0.0 -t aceest-fitness:2.0.0 .
+minikube image load aceest-fitness:2.0.0
+python -m scripts.deploy render --context minikube `
+  --image aceest-fitness:2.0.0 --version 2.0.0
+python -m scripts.deploy bootstrap --context minikube `
+  --image aceest-fitness:2.0.0 --version 2.0.0
+kubectl --context minikube -n aceest get deployments,pods,services,pvc
+minikube service aceest-router -n aceest --url
+```
+
+The PVC uses Minikube's default storage class. `bootstrap` deliberately refuses
+to overwrite an existing baseline. If initial bootstrap fails, inspect events
+and repair the cause before retrying; there is no previous stable release to
+restore on a brand-new cluster. Do not manually reset a populated namespace.
+
+On Windows Docker-driver Minikube, keep the `minikube service --url` terminal
+open. Alternatively:
+
+```powershell
+kubectl --context minikube -n aceest port-forward service/aceest-router 8080:80
+```
+
+The forwarding process must stay running. `http://127.0.0.1:8080` is local,
+**not a publicly accessible submission endpoint**. For remote review, use an
+authorized HTTPS ingress/load balancer or an approved tunnel, and supply the
+actual reachable URL. Configure TLS and authentication before exposing real
+member data; the inherited educational app has no authentication.
+
+### Shared-data constraint
+
+All eight application replicas use one local SQLite PVC and a 30-second lock
+timeout. The `aceest-storage=true` label **must be assigned to exactly one
+node**, colocating all replicas on the same local filesystem. This preserves
+members/workouts across colors, canary, A/B and rolling pods without duplicating
+data. This is an intentional Minikube demo, **not multi-node HA**. Do not put
+SQLite on NFS or distribute its file across nodes. For a cloud deployment,
+migrate to managed PostgreSQL first, remove node colocation, and use
+backward-compatible expand/contract migrations; application rollback cannot
+undo destructive database migrations or committed user writes.
+
+## Five deployment strategies and rollback
+
+All API paths are available through one router; prefixes are removed before
+proxying to Flask. For example `/ab/api/version`, not just `/ab`.
+Use the root `/` for the dashboard: inherited absolute UI asset/API links are
+not designed for a dashboard mounted below these strategy prefixes.
+
+| Strategy | Endpoint prefix | Actual behavior |
+|---|---|---|
+| Rolling | `/rolling/` | Two replicas, maxUnavailable=0, maxSurge=1, readiness-gated update |
+| Blue-green | `/blue-green/` and `/` | Update inactive color, verify, switch stable Service selector; keep old color |
+| Canary | `/canary/` | Per-request 10% -> 50% -> 100%, 200-request checks and pause at each stage; promote stable then reset canary to 0% |
+| Shadow | `/shadow/` | Respond from stable; mirror GET/HEAD only to candidate; never replay POST/DELETE writes |
+| A/B | `/ab/` | 50/50 initial assignment, sticky `aceest_variant=A/B` cookie; candidate remains isolated from stable routing |
+
+Shadow response bodies are discarded, so inspect candidate and router logs to
+confirm mirrored traffic. A/B is a traffic-routing demonstration, not a
+statistically powered business experiment. Do not promote it based solely on
+HTTP availability. Both A/B and shadow deliberately keep stable unchanged.
+Canary percentages are probabilistic, not exact quotas per 200 requests.
+Readiness and successful smoke checks establish application-level availability,
+not a universal zero-downtime guarantee during a node failure.
+
+Build/load another version, then run (or let Jenkins run after registry push):
+
+```powershell
+python -m scripts.deploy deploy --context minikube `
+  --image YOUR_DOCKERHUB_USER/aceest-fitness:IMMUTABLE_TAG `
+  --version 2.1.0 --strategy blue-green --evidence artifacts
+# Repeat with rolling, canary, shadow or ab.
+python -m scripts.deploy rollback --context minikube `
+  --rollback-file .\artifacts\rollback.json
+```
+
+Each deployment persists previous Deployment specs, router config reference,
+and stable Service selector **before** making changes. Failure restores all
+saved objects, waits for readiness and verifies the previous stable version,
+then exits nonzero. A rollback failure also remains an explicit failure.
+Download Jenkins' `artifacts/rollback.json` to perform the same rollback later.
+Immutable routing ConfigMaps are retained for rollback; do not prune configs
+referenced by retained ReplicaSets. Run only one release driver against this
+namespace at a time; Jenkins job-level concurrency locking does not serialize
+manual operations or separate Jenkins jobs.
+
+## Versions, collaboration and final submission
+
+Assignment 1 remains available at commit `0cfe471`; do not copy divergent
+application files just to fabricate versions. Create annotated release tags
+after real commits, update `VERSION` for new releases and use PRs with required
+GitHub Actions and Jenkins checks. The existing Actions workflow remains a
+fast build/lint/container-test check; Jenkins performs delivery.
+
+Publish the original application too (run in a separate worktree):
+
+```powershell
+git worktree add ..\aceest-v1 0cfe471
+docker build -t YOUR_DOCKERHUB_USER/aceest-fitness:1.0.0 ..\aceest-v1
+docker push YOUR_DOCKERHUB_USER/aceest-fitness:1.0.0
+git worktree remove ..\aceest-v1
+# After committing/merging Assignment 2:
+git tag -a v2.0.0 -m "Assignment 2 CI/CD release"
+git push origin main --tags
+```
+
+The registry commands require your own authenticated Docker Hub account.
+Never paste passwords/tokens into files or command-line arguments.
+
+Before submitting:
+
+- Merge the implementation PR and verify the public repository contents.
+- Supply the real running-cluster URL and demonstrate all five prefixes.
+- Attach successful Jenkins runs for recent commits, not local substitutes.
+- Attach SonarQube dashboard evidence and the exported analysis report.
+- Resolve or formally review the inherited CSRF finding before expecting the
+  strict Jenkins release gate to pass.
+- Link your own public image repository containing every release.
+- Print [REPORT.html](REPORT.html) to A4/PDF; update evidence for the final run.
 
 ## Troubleshooting
 
-- **Port 5000 is busy:** map another host port with
-  `docker run -p 8080:5000 ...` or set `PORT=8080` for direct execution.
-- **Jenkins cannot access Docker:** verify Docker is running and that the
-  Jenkins agent has explicit daemon access. Restart the agent after permission
-  changes.
-- **Database is read-only in a container:** mount a writable directory or named
-  volume at `/app/instance`, as shown in `compose.yaml`.
-- **GitHub webhook does not trigger Jenkins:** use GitHub's webhook delivery log
-  to confirm DNS, TLS, response status, and public reachability.
+- Pending PVC/pods: check Minikube's default storage class, the single labelled
+  storage node, and `kubectl --context minikube -n aceest get events`.
+- Rollout failure: inspect pod logs and image pull errors. Private images need
+  `imagePullSecrets` configured before use; this lab expects public images.
+- Jenkins cannot reach Minikube: Docker-driver host-only addresses or Windows
+  kubeconfig file paths are not portable to a remote Linux agent. Use a
+  reachable cluster endpoint and self-contained credential files.
+- Sonar gate/webhook timeout: confirm the project token, scanner tool name,
+  configured server URL and trailing-slash webhook reachability.
 
-## License
-
-This project is provided for educational use as part of the ACEest DevOps
-assignment.
+Educational use. The existing unauthenticated application is not a production
+member-management service.

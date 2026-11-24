@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-${SLOT}
+  namespace: aceest
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 180
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels: {app: aceest-fitness, slot: "${SLOT}"}
+  template:
+    metadata:
+      labels: {app: aceest-fitness, slot: "${SLOT}"}
+    spec:
+      nodeSelector: {aceest-storage: "true"}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 40
+      containers:
+        - name: web
+          image: "${IMAGE}"
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 5000}]
+          env:
+            - {name: DATABASE_PATH, value: /app/instance/aceest.sqlite}
+            - {name: APP_VERSION, value: "${VERSION}"}
+            - {name: DEPLOYMENT_SLOT, value: "${SLOT}"}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 2
+            failureThreshold: 45
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /live, port: http}
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              exec: {command: [python, -c, "import time; time.sleep(5)"]}
+          volumeMounts:
+            - {name: data, mountPath: /app/instance}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: aceest-data}
+        - name: tmp
+          emptyDir: {}

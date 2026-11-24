@@ -18,6 +18,8 @@ def create_app(test_config=None):
             "DATABASE_PATH", str(Path(app.instance_path) / "aceest.sqlite")
         ),
         JSON_SORT_KEYS=False,
+        APP_VERSION=os.getenv("APP_VERSION", "2.0.0"),
+        DEPLOYMENT_SLOT=os.getenv("DEPLOYMENT_SLOT", "local"),
     )
 
     if test_config:
@@ -35,7 +37,7 @@ def create_app(test_config=None):
 
 def get_database():
     if "database" not in g:
-        g.database = sqlite3.connect(current_app.config["DATABASE"])
+        g.database = sqlite3.connect(current_app.config["DATABASE"], timeout=30)
         g.database.row_factory = sqlite3.Row
         g.database.execute("PRAGMA foreign_keys = ON")
     return g.database
@@ -74,6 +76,17 @@ def initialize_database():
 
 
 def register_routes(app):
+    @app.get("/api/version")
+    def version():
+        return jsonify(
+            version=current_app.config["APP_VERSION"],
+            slot=current_app.config["DEPLOYMENT_SLOT"],
+        )
+
+    @app.get("/live")
+    def live():
+        return jsonify(status="alive")
+
     @app.get("/")
     def dashboard():
         database = get_database()
